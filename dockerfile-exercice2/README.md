@@ -198,3 +198,250 @@ dossier temporaire en mémoire pour ses fichiers de travail.
 
 Le conteneur `quiz-securise` créé pour le test peut être arrêté avec
 `docker stop quiz-securise` et redémarré avec `docker start quiz-securise`.
+
+## Utiliser le quiz sur Azure
+
+Le quiz utilise trois ressources dans le groupe `tp_container` :
+
+| Ressource | Nom | Rôle |
+| --- | --- | --- |
+| Azure Container Registry | `lozdemir` | Stocke les images Docker. |
+| Identité managée | `quiz-aci-identity` | Permet à l'instance de lire les images du registre grâce au rôle `AcrPull`. |
+| Azure Container Instances | `quiz-docker-aci` | Exécute le conteneur du quiz. |
+
+Le registre conserve l'image ; l'instance la récupère et lance le conteneur.
+L'identité Azure sert à accéder au registre. Elle est différente de l'utilisateur
+`101`, qui exécute Nginx à l'intérieur du conteneur.
+
+Les commandes qui commencent par `az` ci-dessous se lancent dans **Cloud Shell** :
+ouvrir le [portail Azure](https://portal.azure.com/), cliquer sur l'icône
+**Cloud Shell** en haut et choisir **Bash**. Les commandes `docker`, elles, se
+lancent dans le terminal du Mac, avec Docker Desktop démarré.
+
+Avant de commencer, vérifier l'abonnement sélectionné dans Cloud Shell :
+
+```bash
+az account show --query '{abonnement:name,etat:state}' --output table
+```
+
+Pour ce TP, l'abonnement utilisé était `Azure for Students`. Si ce n'est pas
+celui affiché, sélectionner le bon abonnement dans le portail ou avec
+`az account set --subscription "Azure for Students"`.
+
+### Voir le registre, les images et l'instance
+
+Ces deux commandes affichent les dépôts d'images du registre et les tags du quiz :
+
+```bash
+az acr repository list --name lozdemir --output table
+az acr repository show-tags --name lozdemir --repository quiz-docker --output table
+```
+
+Un **tag**, comme `secure` ou `v2`, est un nom donné à une version d'image.
+Pour lister les instances du groupe, puis voir l'état et l'adresse du quiz :
+
+```bash
+az container list --resource-group tp_container --output table
+az container show \
+  --resource-group tp_container \
+  --name quiz-docker-aci \
+  --query '{etat:instanceView.state,ip:ipAddress.ip}' \
+  --output table
+```
+
+`Running` signifie que l'instance fonctionne ; `Stopped` signifie qu'elle est
+arrêtée. Pour ouvrir ou partager le quiz pendant son fonctionnement, former
+l'adresse `http://<adresse-ip>:8080/` avec l'IP affichée. Le port `8080` est
+celui utilisé par Nginx. L'adresse est publique et utilise HTTP, sans
+chiffrement : ne pas y saisir de données personnelles.
+
+Pour afficher les messages du serveur, appelés **logs** :
+
+```bash
+az container logs \
+  --resource-group tp_container \
+  --name quiz-docker-aci \
+  --container-name quiz-docker
+```
+
+### Arrêter et redémarrer l'instance
+
+Dans Cloud Shell, arrêter l'instance quand le quiz n'est plus utilisé :
+
+```bash
+az container stop --resource-group tp_container --name quiz-docker-aci
+```
+
+La commande arrête le conteneur Azure ; le quiz n'est alors plus accessible.
+Quand le groupe est arrêté, sa facturation de calcul s'arrête. Le registre
+`lozdemir` reste une ressource séparée et continue d'avoir son propre coût.
+
+Pour redémarrer le quiz plus tard :
+
+```bash
+az container start --resource-group tp_container --name quiz-docker-aci
+```
+
+Le démarrage reprend la facturation de l'instance. L'IP peut changer : refaire
+la commande `az container show` ci-dessus avant de partager le lien. On peut
+aussi utiliser les boutons **Stop** et **Start** dans la page
+`quiz-docker-aci` du portail.
+[Documentation Microsoft](https://learn.microsoft.com/fr-fr/azure/container-instances/container-instances-stop-start)
+
+### Mettre une nouvelle version du quiz sur Azure
+
+Modifier le code en local ne modifie pas l'image déjà utilisée par Azure. Il
+faut construire une nouvelle image, l'envoyer dans un registre, puis mettre
+l'instance à jour. L'exemple suivant passe par Docker Hub, comme pour notre
+premier déploiement. Il est aussi possible d'envoyer l'image directement dans
+Azure Container Registry après s'y être authentifié depuis le Mac.
+
+Dans cet exemple, `v2` est un nouveau tag. Choisir un tag jamais utilisé pour
+chaque version, par exemple `v3` pour la suivante.
+
+#### 1. Construire et tester sur le Mac
+
+Dans le terminal du Mac, depuis le dossier `dockerfile-exercice2` :
+
+```bash
+docker buildx build \
+  --platform linux/amd64 \
+  --load \
+  -f Dockerfile.secure \
+  -t luboys/quiz-docker:v2 \
+  .
+```
+
+`--platform linux/amd64` construit pour l'architecture prise en charge par
+Azure Container Instances. `--load` rend l'image disponible dans Docker sur le
+Mac. `-f` choisit le Dockerfile et `-t` donne le nom et le tag à l'image.
+
+Tester la nouvelle image localement :
+
+```bash
+docker run -d --rm --name quiz-v2-test \
+  -p 127.0.0.1:8093:8080 \
+  luboys/quiz-docker:v2
+```
+
+Ouvrir [le quiz de test](http://127.0.0.1:8093/), puis l'arrêter :
+
+```bash
+docker stop quiz-v2-test
+```
+
+L'option `--rm` supprime le conteneur de test après son arrêt ; l'image reste
+sur le Mac. Si le résultat convient, publier l'image sur Docker Hub :
+
+```bash
+docker push luboys/quiz-docker:v2
+```
+
+La commande suppose que Docker est connecté au compte `luboys`. Le dépôt Docker
+Hub utilisé pour le TP est public : son image peut être téléchargée par d'autres.
+
+#### 2. Importer l'image dans le registre Azure
+
+Dans **Cloud Shell**, copier l'image de Docker Hub vers `lozdemir` :
+
+```bash
+az acr import \
+  --name lozdemir \
+  --source docker.io/luboys/quiz-docker:v2 \
+  --image quiz-docker:v2
+```
+
+`--source` désigne l'image sur Docker Hub ; `--image` choisit son nom dans le
+registre Azure. Cette commande copie l'image, mais ne met pas encore l'instance
+à jour. [Documentation Microsoft](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-import-images)
+
+#### 3. Récupérer la configuration de l'instance
+
+Le fichier utilisé pour le premier déploiement s'appelait
+`/tmp/quiz-aci-template.json` dans Cloud Shell. Cette session est temporaire :
+le fichier peut disparaître à sa fermeture et n'est pas enregistré dans ce dépôt.
+
+Azure garde le modèle utilisé dans l'historique du déploiement
+`quiz-aci-deploy`. Pour le récupérer dans un nouveau fichier temporaire :
+
+```bash
+az deployment group export \
+  --resource-group tp_container \
+  --name quiz-aci-deploy \
+  --output json > /tmp/quiz-aci-v2.json
+```
+
+Ce modèle correspond à la configuration du **premier déploiement**. Si des
+paramètres de l'instance ont été modifiés depuis, les vérifier avant de le
+réutiliser. Pour conserver une copie sur le Mac, utiliser **Manage files →
+Download** dans Cloud Shell. [Documentation Microsoft](https://learn.microsoft.com/en-us/azure/azure-resource-manager/templates/export-template-cli)
+
+#### 4. Choisir l'image et redéployer
+
+L'instance actuelle utilise une **empreinte** `sha256`, appelée aussi digest :
+elle désigne une image précise. Même si un tag change, cette empreinte reste
+liée à la même image. Pour connaître l'empreinte du tag `v2` dans Azure :
+
+```bash
+az acr repository show \
+  --name lozdemir \
+  --image quiz-docker:v2 \
+  --query digest \
+  --output tsv
+```
+
+Si le tag correspond à une liste de plusieurs manifestes, choisir plutôt
+l'empreinte du manifeste **linux/amd64**. La commande suivante, lancée sur le
+Mac après le `docker push`, permet de voir les plateformes et leurs empreintes :
+
+```bash
+docker buildx imagetools inspect luboys/quiz-docker:v2
+```
+
+Dans Cloud Shell, ouvrir le modèle récupéré :
+
+```bash
+code /tmp/quiz-aci-v2.json
+```
+
+Dans la propriété `image` du conteneur, remplacer seulement l'ancienne
+empreinte par celle de la nouvelle image. Conserver l'adresse du registre et
+`quiz-docker@` devant l'empreinte :
+
+```text
+lozdemir-b0hzgeaaaxd8debj.azurecr.io/quiz-docker@<digest-v2>
+```
+
+Remplacer `<digest-v2>` par la valeur complète, `sha256:` compris, sans les
+signes `<` et `>`, puis enregistrer le fichier.
+Ne pas modifier l'identité, le nom de l'instance, la mémoire ou les autres
+réglages sans vérifier leur effet. Vérifier le modèle :
+
+```bash
+az deployment group validate \
+  --resource-group tp_container \
+  --template-file /tmp/quiz-aci-v2.json \
+  --query properties.provisioningState \
+  --output tsv
+```
+
+Si le résultat est `Succeeded`, lancer le déploiement :
+
+```bash
+az deployment group create \
+  --resource-group tp_container \
+  --name quiz-aci-v2 \
+  --template-file /tmp/quiz-aci-v2.json
+```
+
+La validation vérifie le modèle avant le déploiement ; elle ne garantit pas à
+elle seule que l'application démarrera correctement. Le déploiement utilise le
+nom `quiz-docker-aci` présent dans le modèle, démarre ou redémarre l'instance et
+peut changer son IP. Vérifier ensuite son état, son adresse et le quiz dans le
+navigateur. L'instance en fonctionnement consomme des crédits Azure.
+[Documentation Microsoft](https://learn.microsoft.com/en-us/azure/container-instances/container-instances-update)
+
+Le workflow [GitHub Actions](../.github/workflows/quiz-docker.yml) construit et
+teste l'image lors d'un push sur `main`, d'une pull request vers `main` ou d'un
+lancement manuel. Pour l'instant, il ne publie pas l'image et ne met pas Azure
+à jour : les étapes de publication et de déploiement ci-dessus sont manuelles.
