@@ -1,0 +1,14 @@
+# Dépendances locales et fichiers générés
+node_modules
+dist
+coverage
+rapports
+
+# Fichiers sensibles et journaux
+.env
+.env.*
+*.log
+
+# Fichiers propres à la machine ou à Git
+.DS_Store
+.git

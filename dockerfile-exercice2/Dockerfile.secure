@@ -1,0 +1,34 @@
+# etape 1 : construire les fichiers du quiz.
+FROM node:24.22.3-alpine AS build
+
+WORKDIR /app
+
+# installer les versions indiquées dans le fichier de verrouillage.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# copier le code puis produire le site dans /app/dist.
+COPY . .
+RUN npm run build
+
+
+
+
+# Étape 2 : servir les fichiers avec Nginx sans utiliser root.
+FROM nginx/nginx-unprivileged:1.30.6-alpine
+
+# installer le correctif de sécurité de zlib pendant la construction.
+USER root
+RUN apk add --no-cache --upgrade zlib
+
+# récupérer uniquement le site construit à l'étape précédente.
+COPY --from=build /app/dist/ /usr/share/nginx/html/
+
+# utiliser le compte non privilégier fourni par l'image Nginx
+USER 101:101
+
+# le serveur écoute sur le port 8080 à l'intérieur du conteneur.
+EXPOSE 8080
+
+# garder ngdinx au premier plan tant que le conteneur fonctionne
+CMD ["nginx", "-g", "daemon off;"]
