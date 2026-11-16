@@ -122,10 +122,21 @@ NGINX Inc. sur Docker Hub. `nginx` est le nom de l'éditeur,
 Cette image est prévue pour exécuter Nginx avec un utilisateur limité et son
 port par défaut est `8080`. [Image NGINX Unprivileged](https://hub.docker.com/r/nginx/nginx-unprivileged)
 
-Dans cette image, `id` affiche l'utilisateur `nginx` et le groupe `nginx` avec
-les numéros `101:101`. `USER root` sert pendant la construction à mettre `zlib`
-à jour. La ligne `USER 101:101` sélectionne ensuite le compte limité utilisé au
-démarrage du conteneur. [Instruction Docker USER](https://docs.docker.com/reference/dockerfile/#user)
+L'utilisateur `nginx` et le groupe `nginx` sont créés lors de la construction de
+l'image de base par les développeurs de NGINX. Ils leur donnent respectivement
+les numéros d'utilisateur et de groupe `101` avec les commandes `adduser` et
+`addgroup`. [Dockerfile de l'image NGINX](https://github.com/nginx/docker-nginx-unprivileged/blob/main/stable/alpine-slim/Dockerfile)
+
+Notre instruction `FROM` récupère cette image avec son utilisateur et son groupe.
+`USER root` sert pendant notre construction à mettre `zlib` à jour. La ligne
+`USER 101:101` sélectionne ensuite l'utilisateur et le groupe déjà présents pour
+le démarrage du conteneur. [Instruction Docker USER](https://docs.docker.com/reference/dockerfile/#user)
+
+Pour observer le compte présent dans l'image NGINX, exécuter :
+
+```bash
+docker run --rm --entrypoint id nginx/nginx-unprivileged:1.30.6-alpine
+```
 
 | Vérification | Image initiale | Image sécurisée |
 | --- | --- | --- |
@@ -137,6 +148,16 @@ démarrage du conteneur. [Instruction Docker USER](https://docs.docker.com/refer
 | Signalements Trivy élevés | 43 | 0 |
 | Signalements Trivy moyens | 55 | 0 |
 | Signalements Trivy faibles | 38 | 0 |
+
+### Comparaison visuelle de la taille
+
+Avant, l'image initiale occupait 219 Mo selon la colonne `DISK USAGE` de Docker.
+
+![Taille de l'image initiale, 219 Mo](image_debut.png)
+
+Après la correction, l'image sécurisée occupe 82,1 Mo selon la même colonne.
+
+![Taille de l'image sécurisée, 82,1 Mo](image_apres_correction.png)
 
 Les deux analyses ont été réalisées le 16 novembre 2026 avec Trivy 0.76.2. Le
 [rapport de l'image sécurisée](rapports/trivy-secure.json) est enregistré dans
