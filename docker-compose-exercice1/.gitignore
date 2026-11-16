@@ -1,0 +1,4 @@
+# Ne pas publier les mots de passe du TP.
+.env
+.env.*
+!.env.example

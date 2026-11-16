@@ -199,9 +199,18 @@ dossier temporaire en mémoire pour ses fichiers de travail.
 Le conteneur `quiz-securise` créé pour le test peut être arrêté avec
 `docker stop quiz-securise` et redémarré avec `docker start quiz-securise`.
 
-## Utiliser le quiz sur Azure
+## Ancien déploiement du quiz sur Azure
 
-Le quiz utilise trois ressources dans le groupe `tp_container` :
+Le 16 novembre 2026, l'instance `quiz-docker-aci`, le registre `lozdemir` et
+l'identité `quiz-aci-identity` ont été supprimés à la demande de l'utilisateur.
+Le quiz n'est donc plus déployé par ces ressources. L'image sur Docker Hub et
+les fichiers du projet sur le Mac restent disponibles.
+
+Les explications et commandes ci-dessous conservent une trace du déploiement.
+Pour les réutiliser, il faudrait d'abord recréer et configurer les ressources
+Azure nécessaires.
+
+Le quiz utilisait trois ressources dans le groupe `tp_container` :
 
 | Ressource | Nom | Rôle |
 | --- | --- | --- |
@@ -378,7 +387,7 @@ Download** dans Cloud Shell. [Documentation Microsoft](https://learn.microsoft.c
 
 #### 4. Choisir l'image et redéployer
 
-L'instance actuelle utilise une **empreinte** `sha256`, appelée aussi digest :
+L'instance utilisait une **empreinte** `sha256`, appelée aussi digest :
 elle désigne une image précise. Même si un tag change, cette empreinte reste
 liée à la même image. Pour connaître l'empreinte du tag `v2` dans Azure :
 
@@ -445,3 +454,32 @@ Le workflow [GitHub Actions](../.github/workflows/quiz-docker.yml) construit et
 teste l'image lors d'un push sur `main`, d'une pull request vers `main` ou d'un
 lancement manuel. Pour l'instant, il ne publie pas l'image et ne met pas Azure
 à jour : les étapes de publication et de déploiement ci-dessus sont manuelles.
+
+## Exercice Docker Compose : lancer le quiz
+
+Depuis le dossier `dockerfile-exercice2`, avec Docker Desktop démarré :
+
+```bash
+docker compose up -d --build
+```
+
+Compose construit l'image `quiz-docker:secure` avec `Dockerfile.secure`, puis
+lance le service `quiz-docker` en arrière-plan. Ouvre le quiz sur
+<http://localhost:8082> depuis ce Mac.
+
+```bash
+docker compose ps        # Voir l'état du service.
+docker compose logs -f   # Suivre les journaux ; Ctrl+C pour quitter.
+docker compose stop      # Arrêter le service.
+docker compose start     # Redémarrer le service existant.
+docker compose down      # Supprimer le conteneur et le réseau Compose.
+```
+
+Le fichier Compose garde les protections du TP : système de fichiers en lecture
+seule, espace temporaire dans `/tmp`, capacités Linux retirées, pas de nouveaux
+privilèges, et limites de mémoire, de processeur et de processus. Le compte
+`101:101` est déjà défini par `Dockerfile.secure`.
+
+Après une modification du quiz ou du Dockerfile, relance
+`docker compose up -d --build` pour reconstruire l'image locale et recréer le
+conteneur si nécessaire. Cela ne publie rien sur Docker Hub ni sur Azure.

@@ -1,0 +1,25 @@
+# Exercice 2 : construire et lancer le quiz sécurisé avec Docker Compose.
+name: tp-quiz
+
+services:
+  quiz-docker:
+    build:
+      context: .
+      dockerfile: Dockerfile.secure
+    image: quiz-docker:secure
+    ports:
+      # Port du Mac : port de Nginx dans le conteneur.
+      - "127.0.0.1:8082:8080"
+    # Le Dockerfile utilise déjà l'utilisateur non privilégié 101:101.
+    read_only: true
+    tmpfs:
+      # Nginx peut écrire ses fichiers temporaires uniquement dans /tmp.
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 100
+    restart: unless-stopped

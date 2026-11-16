@@ -1,0 +1,18 @@
+# Dozzle affiche les journaux des conteneurs Docker dans le navigateur.
+# Démarrer : docker compose -f docker-compose.dozzle.yml up -d
+name: tp-dozzle
+
+services:
+  dozzle:
+    image: amir20/dozzle:v11.4.3
+    ports:
+      # Seul ce Mac peut ouvrir l'interface : http://localhost:8888
+      - "127.0.0.1:8888:8080"
+    volumes:
+      # Donne à Dozzle accès à l'API Docker pour consulter les journaux.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_DISABLE_SETUP_WIZARD: "true"
+      DOZZLE_ENABLE_ACTIONS: "false"
+      DOZZLE_ENABLE_SHELL: "false"
+    restart: unless-stopped

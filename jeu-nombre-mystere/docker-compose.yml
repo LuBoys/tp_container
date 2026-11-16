@@ -1,0 +1,35 @@
+# Le projet lance deux applications séparées : le jeu et les scores.
+name: nombre-mystere
+
+services:
+  jeu:
+    # Compose construit l'image avec le Dockerfile de ce dossier.
+    build: ./service-jeu
+    ports:
+      # Le jeu s'ouvre sur le Mac à l'adresse http://localhost:8083.
+      - "127.0.0.1:8083:5000"
+    environment:
+      # « scores » est le nom de l'autre service sur le réseau Docker.
+      SCORES_URL: http://scores:8081
+    depends_on:
+      scores:
+        condition: service_healthy
+    restart: unless-stopped
+
+  scores:
+    build: ./service-scores
+    # Aucun port n'est publié sur le Mac : seul le réseau Docker y accède.
+    expose:
+      - "8081"
+    volumes:
+      # Les scores restent enregistrés quand les conteneurs sont supprimés.
+      - scores_data:/data
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8081/sante') === false ? 1 : 0);"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  scores_data:

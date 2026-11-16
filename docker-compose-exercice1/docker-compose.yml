@@ -1,0 +1,53 @@
+# Exercice 1 : un site Drupal et sa base de données PostgreSQL.
+name: tp-drupal
+
+services:
+  drupal:
+    image: drupal:10-apache
+    ports:
+      # Port du Mac : port du conteneur. 127.0.0.1 limite l'accès au Mac.
+      - "127.0.0.1:8081:80"
+    depends_on:
+      postgres:
+        # Attendre que la base soit prête avant de démarrer le site.
+        condition: service_healthy
+    volumes:
+      # Ces dossiers contiennent les fichiers propres au site Drupal.
+      - drupal_modules:/var/www/html/modules
+      - drupal_profiles:/var/www/html/profiles
+      - drupal_themes:/var/www/html/themes
+      - drupal_sites:/var/www/html/sites
+    networks:
+      - reseau-drupal
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      # Docker Compose lit ce mot de passe dans le fichier local .env.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Renseigne POSTGRES_PASSWORD dans .env}
+    volumes:
+      # Les données de la base survivent à la suppression du conteneur.
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - reseau-drupal
+    restart: unless-stopped
+
+# Docker crée ces espaces de stockage et les conserve après un compose down.
+volumes:
+  drupal_modules:
+  drupal_profiles:
+  drupal_themes:
+  drupal_sites:
+  postgres_data:
+
+# Les deux services peuvent se trouver par leur nom sur ce réseau privé.
+networks:
+  reseau-drupal:
+    driver: bridge

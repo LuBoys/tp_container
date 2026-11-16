@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Le nombre mystère</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='jeu.js') }}" defer></script>
+</head>
+<body>
+  <main class="page">
+    <article class="carte" aria-labelledby="titre-jeu">
+      <header class="entete">
+        <h1 id="titre-jeu">Nombre<br>mystère<span>.</span></h1>
+        <div class="compteur" role="status" aria-live="polite" aria-atomic="true">
+          <span id="compteur-essais" class="compteur-nombre">{{ essais }}</span>
+          <span id="libelle-essais" class="compteur-libelle">essai{% if essais != 1 %}s{% endif %}</span>
+        </div>
+      </header>
+
+      <form id="formulaire-jeu" class="formulaire" action="{{ url_for('proposer') }}" method="post">
+        <label class="visuellement-cache" for="nombre">Ton nombre entre 1 et 100</label>
+        <input id="nombre" name="nombre" type="number" min="1" max="100" required autofocus inputmode="numeric" placeholder="Entre 1 et 100">
+        <button id="valider" type="submit" aria-label="Valider le nombre">→</button>
+      </form>
+
+      {% set messages = get_flashed_messages() %}
+      <p id="message" class="message" role="status" aria-live="polite">{{ messages | join(' ') }}</p>
+
+      <section class="classement" aria-labelledby="titre-classement">
+        <h2 id="titre-classement">Classement</h2>
+        <p id="scores-indisponibles" class="etat" {% if scores_disponibles %}hidden{% endif %}>Classement indisponible.</p>
+        <p id="scores-vides" class="etat" {% if not scores_disponibles or scores %}hidden{% endif %}>Aucun score pour le moment.</p>
+        <ol id="liste-scores" class="liste-scores" {% if not scores_disponibles or not scores %}hidden{% endif %}>
+          {% for score in scores %}
+            <li><span>{{ score.pseudo }}</span><strong>{{ score.essais }} essai{% if score.essais != 1 %}s{% endif %}</strong></li>
+          {% endfor %}
+        </ol>
+      </section>
+    </article>
+  </main>
+</body>
+</html>
